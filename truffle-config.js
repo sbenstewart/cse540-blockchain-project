@@ -1,0 +1,19 @@
+module.exports = {
+  networks: {
+    // This is the default network for Truffle
+    // It's already set up for Ganache!
+    development: {
+     host: "127.0.0.1",     // Localhost (default: none)
+     port: 7545,            // Standard Ethereum port (default: none)
+     network_id: "*",       // Any network (default: none)
+    }
+  },
+
+  // Configure your compilers
+  compilers: {
+    solc: {
+      version: "0.8.19", // Make sure this matches your contract!
+      // settings: { ... }
+    }
+  }
+};
