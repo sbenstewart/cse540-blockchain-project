@@ -167,8 +167,7 @@ export default function PatientDashboard({ onLogout }) {
                 </div>
                 <p className="text-gray-600 text-sm mb-4">
                   Select a medical file to upload to IPFS and store its reference
-                  on the blockchain. Your friend will handle the backend
-                  integration.
+                  on the blockchain.
                 </p>
                 <input
                   type="file"
@@ -407,7 +406,7 @@ export default function PatientDashboard({ onLogout }) {
 
               {incomingRequests.length === 0 && (
                 <p className="text-gray-500 text-sm">
-                  No incoming requests. Once your friend wires the contract,
+                  No incoming requests. Once you wire the contract,
                   doctor requests will show up here.
                 </p>
               )}
