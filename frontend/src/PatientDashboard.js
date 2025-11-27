@@ -1,9 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { Upload, FileText, Shield, Share2, Inbox } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Shield,
+  Share2,
+  Inbox,
+  Check,
+  X,
+} from "lucide-react";
 import {
   uploadFileToIPFS,
   saveMedicalRecordMetadata,
   fetchMedicalRecords,
+  grantAccessToDoctor,
+  revokeAccessFromDoctor,
+  getIncomingAccessRequests,
+  respondToAccessRequest,
 } from "./utils/web3";
 
 // All blockchain interactions are left as TODOs for your friend.
@@ -17,7 +29,6 @@ export default function PatientDashboard({ onLogout }) {
   const [records, setRecords] = useState([]); // [{fileType, ipfsHash, timestamp}]
   const [viewer, setViewer] = useState("");
   const [recordIndex, setRecordIndex] = useState("");
-  const [sharedRecords, setSharedRecords] = useState([]);
   const [incomingRequests, setIncomingRequests] = useState([]); // [{doctor, recordIndex, responded, approved}]
   const [account, setAccount] = useState(() => {
     const user = localStorage.getItem("user");
@@ -37,8 +48,19 @@ export default function PatientDashboard({ onLogout }) {
   useEffect(() => {
     if (activeTab === "myRecords") {
       fetchMyRecords();
+    } else if (activeTab === "requests") {
+      fetchIncomingRequests();
     }
   }, [activeTab]);
+
+  const fetchIncomingRequests = async () => {
+    try {
+      const requests = await getIncomingAccessRequests();
+      setIncomingRequests(requests);
+    } catch (error) {
+      console.error("Failed to fetch requests:", error);
+    }
+  };
 
   // Also listen to storage changes from other tabs
   useEffect(() => {
@@ -97,71 +119,6 @@ export default function PatientDashboard({ onLogout }) {
       console.error("Failed to fetch records:", error);
       alert(`Failed to fetch records: ${error.message}`);
     }
-  };
-
-  const grantAccess = async () => {
-    if (!viewer || recordIndex === "") {
-      alert("Enter doctor address and record index.");
-      return;
-    }
-    console.log(
-      "TODO: call contract.grantAccess(viewer, recordIndex)",
-      viewer,
-      recordIndex
-    );
-    alert("Access granted (placeholder only).");
-  };
-
-  const revokeAccess = async () => {
-    if (!viewer || recordIndex === "") {
-      alert("Enter doctor address and record index.");
-      return;
-    }
-    console.log(
-      "TODO: call contract.revokeAccess(viewer, recordIndex)",
-      viewer,
-      recordIndex
-    );
-    alert("Access revoked (placeholder only).");
-  };
-
-  const getSharedRecords = async () => {
-    console.log(
-      "TODO: call contract.getSharedRecords(patient) from a doctor context"
-    );
-    // This tab is more for doctor-side, here we just show placeholder
-    setSharedRecords([
-      {
-        fileType: "X-Ray",
-        ipfsHash: "QmExampleSharedHash456",
-        timestamp: Math.floor(Date.now() / 1000),
-      },
-    ]);
-  };
-
-  const fetchIncomingRequests = async () => {
-    console.log("TODO: call contract.getMyRequests()");
-    // Demo placeholder data
-    setIncomingRequests([
-      {
-        doctor: "0xDoctorExampleAddress123",
-        recordIndex: 0,
-        responded: false,
-        approved: false,
-      },
-    ]);
-  };
-
-  const approveRequest = async (id) => {
-    console.log("TODO: call contract.respondToRequest(id, true)", id);
-    alert("Request approved (placeholder).");
-    // In real integration, refetch from chain
-  };
-
-  const rejectRequest = async (id) => {
-    console.log("TODO: call contract.respondToRequest(id, false)", id);
-    alert("Request rejected (placeholder).");
-    // In real integration, refetch from chain
   };
 
   const tabButton = (id, label) => (
@@ -284,13 +241,13 @@ export default function PatientDashboard({ onLogout }) {
               )}
 
               <div className="space-y-3 mt-3">
-                {records.map((r, i) => (
+                {records.map((r) => (
                   <div
-                    key={r._id || i}
+                    key={r._id}
                     className="border border-gray-200 p-4 rounded-lg bg-white/80 hover:shadow-sm transition"
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <div>
+                      <div className="flex-1">
                         <p className="text-sm font-medium text-indigo-700">
                           {r.fileName}
                         </p>
@@ -298,8 +255,8 @@ export default function PatientDashboard({ onLogout }) {
                           {new Date(r.timestamp).toLocaleString()}
                         </p>
                       </div>
-                      <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded">
-                        Record #{i + 1}
+                      <span className="bg-indigo-100 text-indigo-700 text-xs px-3 py-1 rounded font-semibold ml-2">
+                        Index: {r.recordIndex}
                       </span>
                     </div>
                     {r.description && (
@@ -307,21 +264,59 @@ export default function PatientDashboard({ onLogout }) {
                         {r.description}
                       </p>
                     )}
-                    <p className="text-xs break-all">
-                      <strong>IPFS Hash:</strong>{" "}
-                      <a
-                        href={`https://ipfs.io/ipfs/${r.ipfsHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-indigo-600 hover:underline"
-                      >
-                        {r.ipfsHash.substring(0, 20)}...
-                      </a>
-                    </p>
-                    <p className="text-xs text-gray-500 mt-2">
-                      <strong>Wallet:</strong>{" "}
-                      {r.walletAddress.substring(0, 10)}...
-                    </p>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div className="text-xs">
+                        <strong>IPFS:</strong>{" "}
+                        <a
+                          href={`https://ipfs.io/ipfs/${r.ipfsHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:underline break-all"
+                        >
+                          {r.ipfsHash.substring(0, 15)}...
+                        </a>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        <strong>Shared with:</strong>{" "}
+                        {r.sharedWith?.length || 0} doctor(s)
+                      </div>
+                    </div>
+                    {r.sharedWith && r.sharedWith.length > 0 && (
+                      <div className="text-xs bg-green-50 p-2 rounded mb-2">
+                        <strong>Access granted to:</strong>
+                        <div className="mt-1">
+                          {r.sharedWith.map((doctor, idx) => (
+                            <div
+                              key={idx}
+                              className="flex justify-between items-center"
+                            >
+                              <span>
+                                {doctor.doctorWallet.substring(0, 10)}...
+                              </span>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await revokeAccessFromDoctor(
+                                      doctor.doctorWallet,
+                                      r.recordIndex
+                                    );
+                                    await fetchMyRecords();
+                                  } catch (error) {
+                                    alert(
+                                      "Failed to revoke access: " +
+                                        error.message
+                                    );
+                                  }
+                                }}
+                                className="text-red-600 hover:text-red-800 text-xs"
+                              >
+                                Revoke
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -335,21 +330,22 @@ export default function PatientDashboard({ onLogout }) {
                 <div className="flex items-center gap-2 mb-4">
                   <Shield className="text-indigo-600" />
                   <h2 className="text-xl font-semibold text-indigo-700">
-                    Manage Doctor Access
+                    Grant Access to Doctor
                   </h2>
                 </div>
                 <p className="text-gray-600 text-sm mb-4">
-                  Grant or revoke access to a specific doctor for a specific
-                  record index.
+                  Enter doctor's wallet address and record index to grant them
+                  access.
                 </p>
 
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Doctor Address
+                  Doctor Wallet Address
                 </label>
                 <input
                   type="text"
                   placeholder="0x..."
                   className="border border-gray-300 p-2 w-full mb-3 rounded-lg text-sm bg-gray-50"
+                  value={viewer}
                   onChange={(e) => setViewer(e.target.value)}
                 />
 
@@ -360,39 +356,44 @@ export default function PatientDashboard({ onLogout }) {
                   type="number"
                   placeholder="0"
                   className="border border-gray-300 p-2 w-full mb-4 rounded-lg text-sm bg-gray-50"
+                  value={recordIndex}
                   onChange={(e) => setRecordIndex(e.target.value)}
                 />
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={grantAccess}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex-1 text-sm"
-                  >
-                    Grant Access (placeholder)
-                  </button>
-                  <button
-                    onClick={revokeAccess}
-                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex-1 text-sm"
-                  >
-                    Revoke Access (placeholder)
-                  </button>
-                </div>
+                <button
+                  onClick={async () => {
+                    if (!viewer || recordIndex === "") {
+                      alert("Enter doctor address and record index.");
+                      return;
+                    }
+                    try {
+                      await grantAccessToDoctor(viewer, parseInt(recordIndex));
+                      alert("Access granted to doctor!");
+                      setViewer("");
+                      setRecordIndex("");
+                      await fetchMyRecords();
+                    } catch (error) {
+                      alert("Failed: " + error.message);
+                    }
+                  }}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                  Grant Access
+                </button>
               </div>
 
               <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100">
                 <h3 className="text-lg font-semibold text-indigo-700 mb-2">
-                  How permissions will work
+                  About Access Control
                 </h3>
-                <p className="text-sm text-gray-700 mb-2">
-                  These buttons will call smart contract functions like{" "}
-                  <code>grantAccess</code> and <code>revokeAccess</code> on
-                  MedicalRecords contract. I can replace these boxes here with
-                  image maybe....
-                </p>
-                <p className="text-xs text-gray-500">
-                  Connect this to the deployed contract so the access control is
-                  enforced on-chain.
-                </p>
+                <ul className="text-sm text-gray-700 space-y-2">
+                  <li>
+                    ✓ Grant access to specific doctors for specific records
+                  </li>
+                  <li>✓ Revoke access anytime from the record details</li>
+                  <li>✓ Receive & respond to access requests from doctors</li>
+                  <li>✓ Full control over your medical records</li>
+                </ul>
               </div>
             </div>
           )}
@@ -411,50 +412,21 @@ export default function PatientDashboard({ onLogout }) {
 
               <div className="bg-white/90 rounded-2xl p-6 shadow-sm border border-gray-100 mb-4">
                 <p className="text-sm text-gray-700 mb-3">
-                  This section will show which records specific doctors can
-                  access. For now, it just loads sample data.
+                  This section will show records shared with you by patients.
+                  <strong> (Doctor feature - coming soon)</strong>
                 </p>
                 <button
-                  onClick={getSharedRecords}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm"
+                  disabled
+                  className="bg-gray-400 cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm"
                 >
-                  Load Sample Shared Records
+                  View Shared Records (Doctor Feature)
                 </button>
               </div>
 
-              {sharedRecords.length === 0 && (
-                <p className="text-gray-500 text-sm">
-                  No shared records loaded yet.
-                </p>
-              )}
-
-              <div className="space-y-3 mt-3">
-                {sharedRecords.map((r, i) => (
-                  <div
-                    key={i}
-                    className="border border-gray-200 p-3 rounded-lg bg-white/80 hover:shadow-sm transition"
-                  >
-                    <p className="text-sm">
-                      <strong>Type:</strong> {r.fileType}
-                    </p>
-                    <p className="text-sm break-all">
-                      <strong>IPFS:</strong>{" "}
-                      <a
-                        href={`https://ipfs.io/ipfs/${r.ipfsHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-indigo-600 hover:underline"
-                      >
-                        {r.ipfsHash}
-                      </a>
-                    </p>
-                    <p className="text-sm">
-                      <strong>Timestamp:</strong>{" "}
-                      {new Date(r.timestamp * 1000).toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
+              <p className="text-gray-500 text-sm">
+                No shared records available. This feature is for doctors to view
+                patient records they have access to.
+              </p>
             </div>
           )}
 
@@ -469,60 +441,107 @@ export default function PatientDashboard({ onLogout }) {
                   </h2>
                 </div>
                 <button
-                  onClick={fetchIncomingRequests}
+                  onClick={async () => {
+                    try {
+                      const requests = await getIncomingAccessRequests();
+                      setIncomingRequests(requests);
+                    } catch (error) {
+                      alert("Failed to fetch requests: " + error.message);
+                    }
+                  }}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm"
                 >
-                  Refresh (placeholder)
+                  Refresh
                 </button>
               </div>
 
               {incomingRequests.length === 0 && (
                 <p className="text-gray-500 text-sm">
-                  No incoming requests. Once your friend wires the contract,
-                  doctor requests will show up here.
+                  No pending access requests from doctors.
                 </p>
               )}
 
               <div className="space-y-3 mt-3">
-                {incomingRequests.map((req, i) => (
+                {incomingRequests.map((req) => (
                   <div
-                    key={i}
-                    className="border border-gray-200 p-3 rounded-lg bg-white/80 hover:shadow-sm transition"
+                    key={req._id}
+                    className="border border-yellow-200 p-4 rounded-lg bg-yellow-50 hover:shadow-sm transition"
                   >
-                    <p className="text-sm break-all">
-                      <strong>Doctor:</strong> {req.doctor}
-                    </p>
-                    <p className="text-sm">
-                      <strong>Record Index:</strong> {req.recordIndex}
-                    </p>
-                    <p className="text-sm">
-                      <strong>Status:</strong>{" "}
-                      {req.responded
-                        ? req.approved
-                          ? "Approved"
-                          : "Rejected"
-                        : "Pending"}
-                    </p>
-
-                    {!req.responded && (
-                      <div className="flex gap-3 mt-2">
-                        <button
-                          onClick={() => approveRequest(i)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm"
-                        >
-                          Approve (placeholder)
-                        </button>
-                        <button
-                          onClick={() => rejectRequest(i)}
-                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm"
-                        >
-                          Reject (placeholder)
-                        </button>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-indigo-700">
+                          Access Request from Doctor
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {new Date(req.createdAt).toLocaleString()}
+                        </p>
                       </div>
-                    )}
+                      <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">
+                        Pending
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mb-3 text-sm">
+                      <div>
+                        <strong>Doctor:</strong>{" "}
+                        <span className="break-all">
+                          {req.doctorWallet.substring(0, 15)}...
+                        </span>
+                      </div>
+                      <div>
+                        <strong>Record Index:</strong> {req.recordIndex}
+                      </div>
+                      <div className="col-span-2">
+                        <strong>File:</strong>{" "}
+                        {req.recordId?.fileName || "Unknown"}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await respondToAccessRequest(req._id, "approve");
+                            alert("Request approved!");
+                            const requests = await getIncomingAccessRequests();
+                            setIncomingRequests(requests);
+                          } catch (error) {
+                            alert("Failed: " + error.message);
+                          }
+                        }}
+                        className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm flex-1 justify-center"
+                      >
+                        <Check size={16} /> Approve
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await respondToAccessRequest(req._id, "reject");
+                            alert("Request rejected!");
+                            const requests = await getIncomingAccessRequests();
+                            setIncomingRequests(requests);
+                          } catch (error) {
+                            alert("Failed: " + error.message);
+                          }
+                        }}
+                        className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex-1 justify-center"
+                      >
+                        <X size={16} /> Reject
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
+
+              {incomingRequests.length > 0 && (
+                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>ℹ️ Tip:</strong> Check this tab regularly for access
+                    requests from doctors. You can approve or reject each
+                    request individually.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

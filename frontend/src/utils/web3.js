@@ -8,6 +8,30 @@ const GANACHE_RPC_URLS = [
 ];
 
 /**
+ * Helper function to handle API responses and provide better error messages
+ */
+async function handleApiResponse(response, operationName = "API request") {
+  if (!response.ok) {
+    try {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error || `${operationName} failed: ${response.statusText}`
+      );
+    } catch (parseError) {
+      // If response is not JSON, it's likely server error or backend not running
+      const responseText = await response.text();
+      if (responseText.includes("<!DOCTYPE")) {
+        throw new Error(
+          "Backend server is not running. Make sure npm start is running in the backend folder on port 5000."
+        );
+      }
+      throw new Error(`${operationName} failed: ${response.statusText}`);
+    }
+  }
+  return await response.json();
+}
+
+/**
  * Get all available accounts from Ganache
  */
 export async function getGanacheAccounts() {
@@ -346,6 +370,198 @@ export async function fetchMedicalRecords() {
     return records;
   } catch (error) {
     console.error("Error fetching medical records:", error);
+    throw error;
+  }
+}
+
+/**
+ * Doctor requests access to a patient's record
+ * @param {string} patientWallet - Patient's wallet address
+ * @param {number} recordIndex - Record index
+ * @returns {Promise<Object>} Access request
+ */
+export async function requestAccessToRecord(patientWallet, recordIndex) {
+  try {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      throw new Error("No authentication token found. Please login first.");
+    }
+
+    const response = await fetch("http://localhost:5000/api/access-request", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        patientWallet,
+        recordIndex,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to request access");
+    }
+
+    const data = await response.json();
+    console.log("Access request sent:", data);
+    return data;
+  } catch (error) {
+    console.error("Error requesting access:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get incoming access requests for patient
+ * @returns {Promise<Array>} Array of incoming requests
+ */
+export async function getIncomingAccessRequests() {
+  try {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      throw new Error("No authentication token found. Please login first.");
+    }
+
+    const response = await fetch(
+      "http://localhost:5000/api/access-requests/incoming",
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const requests = await handleApiResponse(response, "Fetch access requests");
+    console.log("Incoming access requests:", requests);
+    return requests;
+  } catch (error) {
+    console.error("Error fetching access requests:", error);
+    throw error;
+  }
+}
+
+/**
+ * Patient responds to access request (approve/reject)
+ * @param {string} requestId - Request ID
+ * @param {string} action - "approve" or "reject"
+ * @returns {Promise<Object>} Updated request
+ */
+export async function respondToAccessRequest(requestId, action) {
+  try {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      throw new Error("No authentication token found. Please login first.");
+    }
+
+    const response = await fetch(
+      `http://localhost:5000/api/access-requests/${requestId}/respond`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to respond to request");
+    }
+
+    const data = await response.json();
+    console.log("Request responded:", data);
+    return data;
+  } catch (error) {
+    console.error("Error responding to request:", error);
+    throw error;
+  }
+}
+
+/**
+ * Patient grants direct access to doctor
+ * @param {string} doctorWallet - Doctor's wallet address
+ * @param {number} recordIndex - Record index
+ * @returns {Promise<Object>} Updated record
+ */
+export async function grantAccessToDoctor(doctorWallet, recordIndex) {
+  try {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      throw new Error("No authentication token found. Please login first.");
+    }
+
+    const response = await fetch("http://localhost:5000/api/grant-access", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        doctorWallet,
+        recordIndex,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to grant access");
+    }
+
+    const data = await response.json();
+    console.log("Access granted:", data);
+    return data;
+  } catch (error) {
+    console.error("Error granting access:", error);
+    throw error;
+  }
+}
+
+/**
+ * Patient revokes access from doctor
+ * @param {string} doctorWallet - Doctor's wallet address
+ * @param {number} recordIndex - Record index
+ * @returns {Promise<Object>} Updated record
+ */
+export async function revokeAccessFromDoctor(doctorWallet, recordIndex) {
+  try {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      throw new Error("No authentication token found. Please login first.");
+    }
+
+    const response = await fetch("http://localhost:5000/api/revoke-access", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        doctorWallet,
+        recordIndex,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to revoke access");
+    }
+
+    const data = await response.json();
+    console.log("Access revoked:", data);
+    return data;
+  } catch (error) {
+    console.error("Error revoking access:", error);
     throw error;
   }
 }

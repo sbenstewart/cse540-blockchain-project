@@ -1,9 +1,12 @@
-const express = require("express");
-const cors = require("cors");
-const dotenv = require("dotenv");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-const mongoose = require("mongoose");
+// import ether from "ethers";
+import contractJson from "../build/contracts/MedicalRecordsContract.json" assert { type: "json" };
+import { Web3 } from "web3";
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 
 dotenv.config();
 
@@ -23,6 +26,14 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
+const web3 = new Web3("http://127.0.0.1:7545"); // Ganache RPC
+
+async function loadAccounts() {
+  const accounts = await web3.eth.getAccounts();
+  console.log(accounts);
+  return accounts;
+}
+
 // ============= USER SCHEMA =============
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
@@ -41,11 +52,35 @@ const medicalRecordSchema = new mongoose.Schema({
   ipfsHash: { type: String, required: true, unique: true },
   fileName: { type: String, required: true },
   description: { type: String, default: "" },
+  recordIndex: { type: Number, default: 0 }, // Record index for identification
   timestamp: { type: Date, default: Date.now },
-  sharedWith: { type: Array, default: [] }, // Array of wallet addresses with access
+  sharedWith: { type: Array, default: [] }, // Array of {walletAddress, doctorId} with access
 });
 
 const MedicalRecord = mongoose.model("MedicalRecord", medicalRecordSchema);
+
+// ============= ACCESS REQUEST SCHEMA =============
+const accessRequestSchema = new mongoose.Schema({
+  recordId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "MedicalRecord",
+    required: true,
+  },
+  patientId: { type: String, required: true }, // Patient's MongoDB ID
+  patientWallet: { type: String, required: true },
+  doctorId: { type: String, required: true }, // Doctor's MongoDB ID
+  doctorWallet: { type: String, required: true },
+  recordIndex: { type: Number, required: true },
+  status: {
+    type: String,
+    enum: ["pending", "approved", "rejected"],
+    default: "pending",
+  },
+  createdAt: { type: Date, default: Date.now },
+  respondedAt: { type: Date, default: null },
+});
+
+const AccessRequest = mongoose.model("AccessRequest", accessRequestSchema);
 
 // ============= TRACK ASSIGNED ACCOUNTS =============
 let assignedAccounts = {
@@ -72,6 +107,12 @@ async function loadAssignedAccounts() {
 
 // Call on server start
 setTimeout(() => loadAssignedAccounts(), 2000);
+
+//============== CONTRACT SETUP ==============
+const networkId = Object.keys(contractJson.networks)[0];
+const address = contractJson.networks[networkId].address;
+
+const contract = new web3.eth.Contract(contractJson.abi, address);
 
 // ============= REGISTER ENDPOINT =============
 app.post("/api/register", async (req, res) => {
@@ -145,7 +186,7 @@ app.post("/api/login", async (req, res) => {
 
     // Auto-assign wallet if not already assigned
     if (!user.walletAddress) {
-      user.walletAddress = getNextAvailableWallet(user.role);
+      user.walletAddress = await getNextAvailableWallet(user.role);
       await user.save();
       assignedAccounts[user.role].push(user.walletAddress);
       console.log(`Auto-assigned wallet to ${email}: ${user.walletAddress}`);
@@ -205,19 +246,8 @@ app.get("/api/accounts", (req, res) => {
 
 // ============= GET NEXT AVAILABLE WALLET =============
 // Returns the next unassigned Ganache account based on role
-function getNextAvailableWallet(role) {
-  const ganacheAccounts = [
-    "0x0906e8b12a14b69f5e148b851882130434efb4d3",
-    "0x7ea2626c2945cc2d40413923d5abf3ecc4755593",
-    "0xd4d9a3a69c5f5a8b1f2e3d4c5b6a7f8e9d0c1b2a",
-    "0xc1b2a3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0",
-    "0xb0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9",
-    "0xa9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0",
-    "0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f08",
-    "0x8f9e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f097",
-    "0x7f8e9d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0a6",
-    "0x6f7e8d9c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0b5",
-  ];
+async function getNextAvailableWallet(role) {
+  const ganacheAccounts = await loadAccounts();
 
   // Count how many wallets already assigned to this role
   const assignedCount = assignedAccounts[role].length;
@@ -376,6 +406,11 @@ app.post("/api/medical-records", verifyToken, async (req, res) => {
       description,
       walletAddress,
     });
+    const fileType = fileName.split(".").pop();
+    const tx = await contract.methods
+      .addRecord(ipfsHash, fileType)
+      .send({ from: walletAddress });
+    console.log("Blockchain transaction is done:", tx);
 
     if (!ipfsHash || !fileName || !walletAddress) {
       return res
@@ -390,6 +425,12 @@ app.post("/api/medical-records", verifyToken, async (req, res) => {
         .json({ error: "User ID not found in token. Please login again." });
     }
 
+    // Get the next record index for this user
+    const recordCount = await MedicalRecord.countDocuments({
+      userId: req.userId,
+    });
+    const recordIndex = recordCount;
+
     // Use userId from JWT token, not from body
     const medicalRecord = new MedicalRecord({
       userId: req.userId, // From verified token
@@ -397,11 +438,12 @@ app.post("/api/medical-records", verifyToken, async (req, res) => {
       ipfsHash,
       fileName,
       description,
+      recordIndex: recordIndex, // Auto-assign sequential index
     });
 
     await medicalRecord.save();
     console.log(
-      `Medical record saved: ${fileName} (IPFS: ${ipfsHash}) for user: ${req.userId}`
+      `Medical record saved: ${fileName} (IPFS: ${ipfsHash}) with recordIndex ${recordIndex} for user: ${req.userId}`
     );
 
     res.json({
@@ -426,9 +468,36 @@ app.get("/api/medical-records", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const records = await MedicalRecord.find({
+    let records = await MedicalRecord.find({
       userId: req.userId,
-    }).sort({ timestamp: -1 });
+    }).sort({ timestamp: 1 }); // Sort by oldest first to assign indices in order
+
+    // Auto-fix: Assign recordIndex to any records that don't have one
+    let hasUpdates = false;
+    for (let i = 0; i < records.length; i++) {
+      if (
+        records[i].recordIndex === null ||
+        records[i].recordIndex === undefined
+      ) {
+        records[i].recordIndex = i;
+        await records[i].save();
+        hasUpdates = true;
+        console.log(
+          `Auto-assigned recordIndex ${i} to record ${records[i].fileName}`
+        );
+      }
+    }
+
+    // Sort by newest first for display
+    records = records.sort((a, b) => b.timestamp - a.timestamp);
+
+    console.log(
+      `Fetching ${records.length} records for user ${req.userId}:`,
+      records.map((r) => ({
+        fileName: r.fileName,
+        recordIndex: r.recordIndex,
+      }))
+    );
 
     res.json(records);
   } catch (error) {
@@ -457,6 +526,374 @@ app.get("/api/medical-records/:ipfsHash", verifyToken, async (req, res) => {
 
     res.json(record);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= ACCESS CONTROL ENDPOINTS =============
+
+// Doctor requests access to a patient's record (POST)
+app.post("/api/access-request", verifyToken, async (req, res) => {
+  try {
+    const { patientWallet, recordIndex } = req.body;
+
+    console.log("Access request received:");
+    console.log("  Doctor ID:", req.userId);
+    console.log("  Patient Wallet:", patientWallet);
+    console.log("  Record Index:", recordIndex);
+
+    if (!patientWallet || recordIndex === undefined) {
+      return res
+        .status(400)
+        .json({ error: "Missing patientWallet or recordIndex" });
+    }
+
+    // Find patient by wallet address
+    const patient = await User.findOne({ walletAddress: patientWallet });
+    console.log("  Patient found:", patient ? patient.email : "NOT FOUND");
+
+    if (!patient) {
+      return res.status(404).json({ error: "Patient not found" });
+    }
+
+    // Find the record
+    const record = await MedicalRecord.findOne({
+      userId: patient._id.toString(),
+      recordIndex: recordIndex,
+    });
+
+    console.log("  Record found:", record ? record.fileName : "NOT FOUND");
+
+    if (!record) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+
+    // Get doctor info from token
+    const doctor = await User.findById(req.userId);
+    console.log("  Doctor found:", doctor ? doctor.email : "NOT FOUND");
+
+    if (!doctor) {
+      return res.status(404).json({ error: "Doctor not found" });
+    }
+
+    // Check if request already exists
+    const existingRequest = await AccessRequest.findOne({
+      recordId: record._id,
+      doctorId: req.userId,
+      status: "pending",
+    });
+
+    if (existingRequest) {
+      return res.status(400).json({ error: "Request already pending" });
+    }
+
+    // Create access request
+    const accessRequest = new AccessRequest({
+      recordId: record._id,
+      patientId: patient._id.toString(),
+      patientWallet: patient.walletAddress,
+      doctorId: req.userId,
+      doctorWallet: doctor.walletAddress,
+      recordIndex: recordIndex,
+    });
+
+    await accessRequest.save();
+    console.log(
+      `✓ Access request created: doctor ${doctor.email} -> patient ${patient.email} for record index ${recordIndex}`
+    );
+    console.log(`  Request ID: ${accessRequest._id}`);
+
+    res.json({
+      message: "Access request sent to patient",
+      request: accessRequest,
+    });
+  } catch (error) {
+    console.error("❌ Error creating access request:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get incoming access requests for patient (GET)
+app.get("/api/access-requests/incoming", verifyToken, async (req, res) => {
+  try {
+    console.log("Fetching incoming requests for patient:", req.userId);
+
+    const requests = await AccessRequest.find({
+      patientId: req.userId,
+      status: "pending",
+    })
+      .populate("recordId")
+      .sort({ createdAt: -1 });
+
+    console.log(`  Found ${requests.length} incoming requests`);
+    requests.forEach((r, i) => {
+      console.log(
+        `  ${i + 1}. Doctor: ${r.doctorWallet}, Record Index: ${
+          r.recordIndex
+        }, Status: ${r.status}`
+      );
+    });
+
+    res.json(requests);
+  } catch (error) {
+    console.error("❌ Error fetching access requests:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Patient approves or rejects access request (PUT)
+app.put(
+  "/api/access-requests/:requestId/respond",
+  verifyToken,
+  async (req, res) => {
+    try {
+      const { action } = req.body; // "approve" or "reject"
+
+      if (!action || !["approve", "reject"].includes(action)) {
+        return res.status(400).json({ error: "Invalid action" });
+      }
+
+      const accessRequest = await AccessRequest.findById(req.params.requestId);
+      if (!accessRequest) {
+        return res.status(404).json({ error: "Request not found" });
+      }
+
+      // Verify patient is the owner
+      if (accessRequest.patientId !== req.userId) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      if (accessRequest.status !== "pending") {
+        return res.status(400).json({ error: "Request already responded" });
+      }
+
+      // Update request status
+      accessRequest.status = action === "approve" ? "approved" : "rejected";
+      accessRequest.respondedAt = new Date();
+      await accessRequest.save();
+
+      // If approved, add doctor to sharedWith list
+      if (action === "approve") {
+        const record = await MedicalRecord.findById(accessRequest.recordId);
+        if (record) {
+          // Check if already in sharedWith
+          const alreadyShared = record.sharedWith.some(
+            (entry) => entry.doctorWallet === accessRequest.doctorWallet
+          );
+          if (!alreadyShared) {
+            record.sharedWith.push({
+              doctorWallet: accessRequest.doctorWallet,
+              doctorId: accessRequest.doctorId,
+            });
+            await record.save();
+          }
+        }
+      }
+
+      console.log(
+        `Access request ${action}ed: doctor ${accessRequest.doctorWallet} -> patient ${accessRequest.patientWallet}`
+      );
+
+      res.json({
+        message: `Access request ${action}ed`,
+        request: accessRequest,
+      });
+    } catch (error) {
+      console.error("Error responding to access request:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Get doctor's approved access (for viewing records)
+app.get("/api/approved-access", verifyToken, async (req, res) => {
+  try {
+    const doctor = await User.findById(req.userId);
+    if (!doctor) {
+      return res.status(404).json({ error: "Doctor not found" });
+    }
+
+    const approvedRequests = await AccessRequest.find({
+      doctorId: req.userId,
+      status: "approved",
+    })
+      .populate("recordId")
+      .sort({ respondedAt: -1 });
+
+    res.json(approvedRequests);
+  } catch (error) {
+    console.error("Error fetching approved access:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Patient grants access directly (without request)
+app.post("/api/grant-access", verifyToken, async (req, res) => {
+  try {
+    const { doctorWallet, recordIndex } = req.body;
+
+    if (!doctorWallet || recordIndex === undefined) {
+      return res
+        .status(400)
+        .json({ error: "Missing doctorWallet or recordIndex" });
+    }
+
+    // Find doctor by wallet
+    const doctor = await User.findOne({ walletAddress: doctorWallet });
+    if (!doctor) {
+      return res.status(404).json({ error: "Doctor not found" });
+    }
+
+    // Find record
+    const record = await MedicalRecord.findOne({
+      userId: req.userId,
+      recordIndex: recordIndex,
+    });
+
+    if (!record) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+
+    // Check if already shared
+    const alreadyShared = record.sharedWith.some(
+      (entry) => entry.doctorWallet === doctorWallet
+    );
+
+    if (alreadyShared) {
+      return res.status(400).json({ error: "Already shared with this doctor" });
+    }
+
+    // Add doctor to sharedWith
+    record.sharedWith.push({
+      doctorWallet: doctorWallet,
+      doctorId: doctor._id.toString(),
+    });
+
+    await record.save();
+    console.log(
+      `Direct access granted: doctor ${doctorWallet} -> patient record ${recordIndex}`
+    );
+
+    res.json({
+      message: "Access granted successfully",
+      record: record,
+    });
+  } catch (error) {
+    console.error("Error granting access:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Patient revokes access
+app.post("/api/revoke-access", verifyToken, async (req, res) => {
+  try {
+    const { doctorWallet, recordIndex } = req.body;
+
+    if (!doctorWallet || recordIndex === undefined) {
+      return res
+        .status(400)
+        .json({ error: "Missing doctorWallet or recordIndex" });
+    }
+
+    // Find record
+    const record = await MedicalRecord.findOne({
+      userId: req.userId,
+      recordIndex: recordIndex,
+    });
+
+    if (!record) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+
+    // Remove doctor from sharedWith
+    record.sharedWith = record.sharedWith.filter(
+      (entry) => entry.doctorWallet !== doctorWallet
+    );
+
+    await record.save();
+    console.log(
+      `Access revoked: doctor ${doctorWallet} from patient record ${recordIndex}`
+    );
+
+    res.json({
+      message: "Access revoked successfully",
+      record: record,
+    });
+  } catch (error) {
+    console.error("Error revoking access:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= DEBUG: Check all records in database =============
+app.get("/api/debug/records", async (req, res) => {
+  try {
+    const records = await MedicalRecord.find({}).sort({ timestamp: -1 });
+    res.json({
+      totalRecords: records.length,
+      records: records.map((r) => ({
+        _id: r._id,
+        fileName: r.fileName,
+        userId: r.userId,
+        recordIndex: r.recordIndex,
+        timestamp: r.timestamp,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= MIGRATION: Add recordIndex to existing records =============
+app.post("/api/migrate-record-indices", async (req, res) => {
+  try {
+    console.log(
+      "Starting migration: adding recordIndex to existing records..."
+    );
+
+    // Get all records grouped by userId
+    const records = await MedicalRecord.find({}).sort({
+      userId: 1,
+      timestamp: 1,
+    });
+
+    console.log(`Total records in database: ${records.length}`);
+
+    let updated = 0;
+    const userRecordMap = {};
+
+    for (const record of records) {
+      // Count how many records this user has with index already set
+      if (!userRecordMap[record.userId]) {
+        userRecordMap[record.userId] = 0;
+      }
+
+      // If record doesn't have a valid recordIndex, assign one
+      if (record.recordIndex === undefined || record.recordIndex === null) {
+        record.recordIndex = userRecordMap[record.userId];
+        await record.save();
+        updated++;
+        console.log(
+          `✓ Updated ${record.fileName}: recordIndex = ${record.recordIndex}`
+        );
+      } else {
+        console.log(
+          `✓ Already has index: ${record.fileName} (index=${record.recordIndex})`
+        );
+      }
+
+      userRecordMap[record.userId]++;
+    }
+
+    console.log(`Migration complete! Updated ${updated} records.`);
+
+    res.json({
+      message: `Migration completed. Updated ${updated} records.`,
+      recordsUpdated: updated,
+      totalRecords: records.length,
+    });
+  } catch (error) {
+    console.error("Migration error:", error);
     res.status(500).json({ error: error.message });
   }
 });
