@@ -1,5 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Upload, FileText, Shield, Share2, Inbox } from "lucide-react";
+import {
+  uploadFileToIPFS,
+  saveMedicalRecordMetadata,
+  fetchMedicalRecords,
+} from "./utils/web3";
 
 // All blockchain interactions are left as TODOs for your friend.
 // Right now these functions just log to the console.
@@ -14,7 +19,37 @@ export default function PatientDashboard({ onLogout }) {
   const [recordIndex, setRecordIndex] = useState("");
   const [sharedRecords, setSharedRecords] = useState([]);
   const [incomingRequests, setIncomingRequests] = useState([]); // [{doctor, recordIndex, responded, approved}]
-  const [account] = useState("0x…patient_wallet_address_here"); // placeholder text
+  const [account, setAccount] = useState(() => {
+    const user = localStorage.getItem("user");
+    return user ? JSON.parse(user).walletAddress : "Not assigned";
+  });
+
+  // Update account whenever component mounts or when user data changes
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      const userData = JSON.parse(user);
+      setAccount(userData.walletAddress || "Not assigned");
+    }
+  }, []);
+
+  // Fetch records when "My Records" tab is opened
+  useEffect(() => {
+    if (activeTab === "myRecords") {
+      fetchMyRecords();
+    }
+  }, [activeTab]);
+
+  // Also listen to storage changes from other tabs
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const user = localStorage.getItem("user");
+      setAccount(user ? JSON.parse(user).walletAddress : "Not assigned");
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
 
   // ---------- Placeholder functions for blockchain integration ----------
 
@@ -23,20 +58,45 @@ export default function PatientDashboard({ onLogout }) {
       alert("Please select a file.");
       return;
     }
-    console.log("TODO: upload file to IPFS and store on-chain", file);
-    alert("This is a UI placeholder. Blockchain upload will be implemented.");
+
+    try {
+      alert("Uploading file to IPFS... Please wait.");
+
+      // Upload file to IPFS
+      const ipfsHash = await uploadFileToIPFS(file);
+      console.log("File uploaded to IPFS with hash:", ipfsHash);
+
+      // Save metadata to backend
+      await saveMedicalRecordMetadata(
+        ipfsHash,
+        file.name,
+        `Medical record uploaded on ${new Date().toLocaleDateString()}`
+      );
+
+      alert(
+        `File uploaded successfully!\n\nIPFS Hash: ${ipfsHash}\n\nFile is now stored on IPFS and metadata saved to blockchain.`
+      );
+
+      // Clear file input
+      setFile(null);
+
+      // Refresh records
+      await fetchMyRecords();
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert(`Upload failed: ${error.message}`);
+    }
   };
 
   const fetchMyRecords = async () => {
-    console.log("TODO: fetch records from MedicalRecordsContract.getMyRecords()");
-    // Example demo data – you can remove this once blockchain is wired
-    setRecords([
-      {
-        fileType: "Blood Test",
-        ipfsHash: "QmExampleHash123",
-        timestamp: Math.floor(Date.now() / 1000),
-      },
-    ]);
+    try {
+      const fetchedRecords = await fetchMedicalRecords();
+      setRecords(fetchedRecords);
+      console.log("Records fetched and displayed:", fetchedRecords);
+    } catch (error) {
+      console.error("Failed to fetch records:", error);
+      alert(`Failed to fetch records: ${error.message}`);
+    }
   };
 
   const grantAccess = async () => {
@@ -129,8 +189,8 @@ export default function PatientDashboard({ onLogout }) {
           </h1>
           <p className="text-gray-600 text-sm md:text-base mt-1">
             Connected account:{" "}
-            <span className="font-mono break-all">
-              {account || "Connect wallet (blockchain todo)"}
+            <span className="font-mono break-all text-green-600">
+              {account}
             </span>
           </p>
         </div>
@@ -166,9 +226,9 @@ export default function PatientDashboard({ onLogout }) {
                   </h2>
                 </div>
                 <p className="text-gray-600 text-sm mb-4">
-                  Select a medical file to upload to IPFS and store its reference
-                  on the blockchain. Your friend will handle the backend
-                  integration.
+                  Select a medical file to upload to IPFS and store its
+                  reference on the blockchain. Your friend will handle the
+                  backend integration.
                 </p>
                 <input
                   type="file"
@@ -213,44 +273,54 @@ export default function PatientDashboard({ onLogout }) {
                   onClick={fetchMyRecords}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm"
                 >
-                  Refresh (placeholder)
+                  Refresh Records
                 </button>
               </div>
 
               {records.length === 0 && (
                 <p className="text-gray-500 text-sm">
-                  No records loaded. Click{" "}
-                  <span className="font-medium">Refresh</span> to load sample
-                  data or integrate blockchain.
+                  No records found. Upload a medical record to see it here.
                 </p>
               )}
 
               <div className="space-y-3 mt-3">
                 {records.map((r, i) => (
                   <div
-                    key={i}
-                    className="border border-gray-200 p-3 rounded-lg bg-white/80 hover:shadow-sm transition"
+                    key={r._id || i}
+                    className="border border-gray-200 p-4 rounded-lg bg-white/80 hover:shadow-sm transition"
                   >
-                    <p className="text-sm">
-                      <strong>Index:</strong> {i}
-                    </p>
-                    <p className="text-sm">
-                      <strong>Type:</strong> {r.fileType}
-                    </p>
-                    <p className="text-sm break-all">
-                      <strong>IPFS:</strong>{" "}
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-indigo-700">
+                          {r.fileName}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(r.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                      <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded">
+                        Record #{i + 1}
+                      </span>
+                    </div>
+                    {r.description && (
+                      <p className="text-sm text-gray-600 mb-2">
+                        {r.description}
+                      </p>
+                    )}
+                    <p className="text-xs break-all">
+                      <strong>IPFS Hash:</strong>{" "}
                       <a
                         href={`https://ipfs.io/ipfs/${r.ipfsHash}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-indigo-600 hover:underline"
                       >
-                        {r.ipfsHash}
+                        {r.ipfsHash.substring(0, 20)}...
                       </a>
                     </p>
-                    <p className="text-sm">
-                      <strong>Timestamp:</strong>{" "}
-                      {new Date(r.timestamp * 1000).toLocaleString()}
+                    <p className="text-xs text-gray-500 mt-2">
+                      <strong>Wallet:</strong>{" "}
+                      {r.walletAddress.substring(0, 10)}...
                     </p>
                   </div>
                 ))}
@@ -314,13 +384,14 @@ export default function PatientDashboard({ onLogout }) {
                   How permissions will work
                 </h3>
                 <p className="text-sm text-gray-700 mb-2">
-                  These buttons will call smart contract
-                  functions like <code>grantAccess</code> and{" "}
-                  <code>revokeAccess</code> on  MedicalRecords contract. I can replace these boxes here with image maybe....
+                  These buttons will call smart contract functions like{" "}
+                  <code>grantAccess</code> and <code>revokeAccess</code> on
+                  MedicalRecords contract. I can replace these boxes here with
+                  image maybe....
                 </p>
                 <p className="text-xs text-gray-500">
-                  Connect this to the deployed contract so the
-                  access control is enforced on-chain.
+                  Connect this to the deployed contract so the access control is
+                  enforced on-chain.
                 </p>
               </div>
             </div>

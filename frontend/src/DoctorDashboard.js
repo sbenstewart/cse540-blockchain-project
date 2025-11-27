@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Shield, Share2, Search } from "lucide-react";
 
 // All blockchain interactions are left as TODOs for your friend.
@@ -10,7 +10,30 @@ export default function DoctorDashboard({ onLogout }) {
   const [patientAddress, setPatientAddress] = useState("");
   const [doctorRecordIndex, setDoctorRecordIndex] = useState("");
   const [accessibleRecords, setAccessibleRecords] = useState([]); // will come from blockchain
-  const [account] = useState("0x…doctor_wallet_address_here"); // placeholder
+  const [account, setAccount] = useState(() => {
+    const user = localStorage.getItem("user");
+    return user ? JSON.parse(user).walletAddress : "Not assigned";
+  });
+
+  // Update account whenever component mounts or when user data changes
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      const userData = JSON.parse(user);
+      setAccount(userData.walletAddress || "Not assigned");
+    }
+  }, []);
+
+  // Also listen to storage changes from other tabs
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const user = localStorage.getItem("user");
+      setAccount(user ? JSON.parse(user).walletAddress : "Not assigned");
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
 
   // Placeholder: request access workflow
   const requestAccess = async () => {
@@ -69,8 +92,8 @@ export default function DoctorDashboard({ onLogout }) {
           </h1>
           <p className="text-gray-600 text-sm md:text-base mt-1">
             Connected account:{" "}
-            <span className="font-mono break-all">
-              {account || "Connect wallet (blockchain todo)"}
+            <span className="font-mono break-all text-green-600">
+              {account}
             </span>
           </p>
         </div>
@@ -222,10 +245,10 @@ export default function DoctorDashboard({ onLogout }) {
                 records that patients have explicitly granted access to.
               </p>
               <p className="text-xs text-gray-500">
-                Should we add something like searching within the
-                set of records doc has already have access to, filtered by type,
-                date, or keywords. We might need to extend the smart contract and
-                UI for that later if needed.
+                Should we add something like searching within the set of records
+                doc has already have access to, filtered by type, date, or
+                keywords. We might need to extend the smart contract and UI for
+                that later if needed.
               </p>
             </div>
           )}

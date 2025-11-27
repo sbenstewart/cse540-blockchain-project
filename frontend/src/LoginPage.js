@@ -1,19 +1,68 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function LoginPage({ onLogin }) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("patient"); // "patient" | "doctor"
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
 
-    if (!email.trim() || !password.trim()) {
-      return alert("Please enter your email and password");
+    try {
+      if (!email.trim() || !password.trim()) {
+        throw new Error("Please enter your email and password");
+      }
+
+      // Call backend API to login
+      const response = await fetch("http://localhost:5000/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Login failed");
+      }
+
+      const data = await response.json();
+
+      // Store token and user info in localStorage
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      console.log("Login successful:", data.user);
+
+      // Call parent onLogin with role
+      onLogin(data.user.role);
+
+      // Redirect after state updates in App.js
+      setTimeout(() => {
+        navigate(
+          data.user.role === "doctor"
+            ? "/doctor-dashboard"
+            : "/patient-dashboard"
+        );
+      }, 100);
+    } catch (err) {
+      setError(err.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // UI-only: your friend will handle actual auth/wallet later
-    onLogin(role);
+  const handleRegisterClick = () => {
+    navigate("/register");
   };
 
   return (
@@ -36,38 +85,11 @@ export default function LoginPage({ onLogin }) {
               </h2>
             </div>
 
-            {/* ROLE SWITCH */}
-            <div className="flex justify-center mb-6">
-              <div className="bg-gray-200 p-1 rounded-full flex gap-2">
-                {/* Patient */}
-                <button
-                  type="button"
-                  onClick={() => setRole("patient")}
-                  className={`px-4 py-1 rounded-full text-sm font-medium transition
-                    ${
-                      role === "patient"
-                        ? "bg-blue-600 text-white"
-                        : "text-slate-700 hover:bg-blue-100 hover:text-blue-700"
-                    }`}
-                >
-                  Patient
-                </button>
-
-                {/* Doctor */}
-                <button
-                  type="button"
-                  onClick={() => setRole("doctor")}
-                  className={`px-4 py-1 rounded-full text-sm font-medium transition
-                    ${
-                      role === "doctor"
-                        ? "bg-blue-600 text-white"
-                        : "text-slate-700 hover:bg-blue-100 hover:text-blue-700"
-                    }`}
-                >
-                  Doctor
-                </button>
+            {error && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                {error}
               </div>
-            </div>
+            )}
 
             <div className="space-y-6">
               <div>
@@ -122,19 +144,21 @@ export default function LoginPage({ onLogin }) {
               <div className="mt-8">
                 <button
                   type="submit"
-                  className="w-full py-2.5 px-4 text-[15px] font-medium rounded-md text-white bg-blue-600 !bg-blue-600 hover:!bg-blue-800 focus:outline-none cursor-pointer transition duration-200"
+                  disabled={loading}
+                  className="w-full py-2.5 px-4 text-[15px] font-medium rounded-md text-white bg-blue-600 hover:bg-blue-800 focus:outline-none cursor-pointer transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Sign in as {role === "doctor" ? "Doctor" : "Patient"}
+                  {loading ? "Signing in..." : "Sign in"}
                 </button>
 
                 <p className="text-sm mt-6 text-center text-slate-600">
                   Don't have an account?
-                  <a
-                    href="#!"
+                  <button
+                    type="button"
+                    onClick={handleRegisterClick}
                     className="text-blue-600 ml-1 hover:underline"
                   >
                     Register here
-                  </a>
+                  </button>
                 </p>
               </div>
             </div>
