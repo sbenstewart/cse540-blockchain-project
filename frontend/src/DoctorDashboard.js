@@ -35,36 +35,75 @@ export default function DoctorDashboard({ onLogout }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  // Placeholder: request access workflow
-  const requestAccess = async () => {
+  // Doctor can only request access, not approve or revoke
+  const requestAccess = async (req, res) => {
     if (!patientAddress || doctorRecordIndex === "") {
       alert("Enter patient address and record index.");
       return;
     }
-    console.log(
-      "TODO: call contract.requestAccess(patient, recordIndex)",
-      patientAddress,
-      doctorRecordIndex
-    );
-    alert("Access request sent (placeholder).");
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:5000/api/access-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          patientWallet: patientAddress,
+          recordIndex: Number(doctorRecordIndex),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to send access request");
+      }
+      alert("Access request sent!");
+      setPatientAddress("");
+      setDoctorRecordIndex("");
+    } catch (error) {
+      alert("Error: " + error.message);
+    }
   };
 
+  // Doctor can only view records shared by patients (when approved)
   const fetchAccessibleRecords = async () => {
     if (!patientAddress) {
       alert("Enter patient address.");
       return;
     }
-    console.log(
-      "TODO: call contract.getSharedRecords(patient) from doctor account"
-    );
-    // Demo placeholder data
-    setAccessibleRecords([
-      {
-        fileType: "Blood Test Result",
-        ipfsHash: "QmDoctorViewHash123",
-        timestamp: Math.floor(Date.now() / 1000),
-      },
-    ]);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `http://localhost:5000/api/approved-access?patientWallet=${patientAddress}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const data = await response.json();
+      console.log("Accessible records response:", data);
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch accessible records");
+      }
+      // Map access requests to medical record objects (recordId)
+      let accessRequests = Array.isArray(data)
+        ? data
+        : Array.isArray(data.records)
+        ? data.records
+        : [];
+      // Only include those with populated recordId and status 'approved'
+      const records = accessRequests
+        .filter((req) => req.status === "approved" && req.recordId)
+        .map((req) => req.recordId);
+      setAccessibleRecords(records);
+    } catch (error) {
+      alert("Error: " + error.message);
+      setAccessibleRecords([]);
+    }
   };
 
   const doctorTabButton = (id, label) => (
@@ -202,31 +241,52 @@ export default function DoctorDashboard({ onLogout }) {
               )}
 
               <div className="space-y-3 mt-3">
-                {accessibleRecords.map((r, i) => (
-                  <div
-                    key={i}
-                    className="border border-gray-200 p-3 rounded-lg bg-white/80 hover:shadow-sm transition"
-                  >
-                    <p className="text-sm">
-                      <strong>Type:</strong> {r.fileType}
-                    </p>
-                    <p className="text-sm break-all">
-                      <strong>IPFS:</strong>{" "}
-                      <a
-                        href={`https://ipfs.io/ipfs/${r.ipfsHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-indigo-600 hover:underline"
-                      >
-                        {r.ipfsHash}
-                      </a>
-                    </p>
-                    <p className="text-sm">
-                      <strong>Timestamp:</strong>{" "}
-                      {new Date(r.timestamp * 1000).toLocaleString()}
-                    </p>
-                  </div>
-                ))}
+                {accessibleRecords.map((r, i) => {
+                  // Log timestamp for debugging
+                  console.log("Record timestamp:", r.timestamp);
+                  let displayDate = "";
+                  if (r.timestamp) {
+                    // If it's a string or ms, use directly
+                    if (
+                      typeof r.timestamp === "string" ||
+                      r.timestamp > 1000000000000
+                    ) {
+                      displayDate = new Date(r.timestamp).toLocaleString();
+                    } else {
+                      // Assume seconds
+                      displayDate = new Date(
+                        r.timestamp * 1000
+                      ).toLocaleString();
+                    }
+                  } else {
+                    displayDate = "Unknown";
+                  }
+                  return (
+                    <div
+                      key={i}
+                      className="border border-gray-200 p-3 rounded-lg bg-white/80 hover:shadow-sm transition"
+                    >
+                      <p className="text-sm">
+                        <strong>Type:</strong>{" "}
+                        {r.fileType || r.fileName?.split(".").pop()}
+                      </p>
+                      <p className="text-sm break-all">
+                        <strong>IPFS:</strong>{" "}
+                        <a
+                          href={`https://ipfs.io/ipfs/${r.ipfsHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:underline"
+                        >
+                          {r.ipfsHash}
+                        </a>
+                      </p>
+                      <p className="text-sm">
+                        <strong>Timestamp:</strong> {displayDate}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

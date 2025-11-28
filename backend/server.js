@@ -73,7 +73,7 @@ const accessRequestSchema = new mongoose.Schema({
   recordIndex: { type: Number, required: true },
   status: {
     type: String,
-    enum: ["pending", "approved", "rejected"],
+    enum: ["pending", "approved", "rejected", "revoked"],
     default: "pending",
   },
   createdAt: { type: Date, default: Date.now },
@@ -203,6 +203,7 @@ app.post("/api/login", async (req, res) => {
       JWT_SECRET,
       { expiresIn: "24h" }
     );
+    console.log(token);
 
     console.log(`User logged in: ${email}`);
 
@@ -605,7 +606,14 @@ app.post("/api/access-request", verifyToken, async (req, res) => {
 
     res.json({
       message: "Access request sent to patient",
-      request: accessRequest,
+      request: {
+        id: accessRequest._id,
+        patientWallet: accessRequest.patientWallet,
+        doctorWallet: accessRequest.doctorWallet,
+        recordIndex: accessRequest.recordIndex,
+        status: accessRequest.status,
+        createdAt: accessRequest.createdAt,
+      },
     });
   } catch (error) {
     console.error("❌ Error creating access request:", error);
@@ -675,6 +683,26 @@ app.put(
       // If approved, add doctor to sharedWith list
       if (action === "approve") {
         const record = await MedicalRecord.findById(accessRequest.recordId);
+        const patientWallet = accessRequest.patientWallet;
+        const doctorWallet = accessRequest.doctorWallet;
+        const recordIndex = Number(accessRequest.recordIndex);
+        const tx = await contract.methods
+          .grantAccess(doctorWallet, recordIndex)
+          .send({ from: patientWallet });
+
+        console.log(
+          "Blockchain transaction is done for giving access:",
+          tx.transactionHash
+        );
+
+        // Optional: verify what doctor sees now
+        // const sharedRecords = await contract.methods
+        //   .getSharedRecords(patientWallet)
+        //   .call({ from: doctorWallet });
+
+        // console.log("Doctor can see (on-chain):", sharedRecords);
+
+        console.log("Access granted to doctor!");
         if (record) {
           // Check if already in sharedWith
           const alreadyShared = record.sharedWith.some(
@@ -787,7 +815,14 @@ app.post("/api/grant-access", verifyToken, async (req, res) => {
 // Patient revokes access
 app.post("/api/revoke-access", verifyToken, async (req, res) => {
   try {
-    const { doctorWallet, recordIndex } = req.body;
+    console.log("Revoke access request body:", req.body);
+    const { doctorWallet, recordIndex, patientWallet } = req.body;
+
+    const tx = await contract.methods
+      .revokeAccess(doctorWallet, recordIndex)
+      .send({ from: patientWallet });
+
+    console.log("Access revoked on blockchain:", tx.transactionHash);
 
     if (!doctorWallet || recordIndex === undefined) {
       return res
@@ -811,6 +846,15 @@ app.post("/api/revoke-access", verifyToken, async (req, res) => {
     );
 
     await record.save();
+    // const accessRequest = await AccessRequest.findById(req.params.requestId);
+    // if (!accessRequest) {
+    //   return res.status(404).json({ error: "Request not found" });
+    // }
+
+    // accessRequest.status = "revoked";
+    // accessRequest.respondedAt = new Date();
+    // await accessRequest.save();
+
     console.log(
       `Access revoked: doctor ${doctorWallet} from patient record ${recordIndex}`
     );

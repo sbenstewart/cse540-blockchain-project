@@ -120,6 +120,38 @@ export default function PatientDashboard({ onLogout }) {
       alert(`Failed to fetch records: ${error.message}`);
     }
   };
+  // Respond to access request: approve or reject
+  const handleAccessRequestResponse = async (
+    requestId,
+    action,
+    doctorWallet,
+    recordId
+  ) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `http://localhost:5000/api/access-requests/${requestId}/respond`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ action }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to respond to access request");
+      }
+      alert(`Request ${action === "approve" ? "approved" : "rejected"}!`);
+      // Refresh requests
+      const requests = await getIncomingAccessRequests();
+      setIncomingRequests(requests);
+    } catch (error) {
+      alert("Failed: " + error.message);
+    }
+  };
 
   const tabButton = (id, label) => (
     <button
@@ -499,31 +531,17 @@ export default function PatientDashboard({ onLogout }) {
 
                     <div className="flex gap-2">
                       <button
-                        onClick={async () => {
-                          try {
-                            await respondToAccessRequest(req._id, "approve");
-                            alert("Request approved!");
-                            const requests = await getIncomingAccessRequests();
-                            setIncomingRequests(requests);
-                          } catch (error) {
-                            alert("Failed: " + error.message);
-                          }
-                        }}
+                        onClick={() =>
+                          handleAccessRequestResponse(req._id, "approve")
+                        }
                         className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm flex-1 justify-center"
                       >
                         <Check size={16} /> Approve
                       </button>
                       <button
-                        onClick={async () => {
-                          try {
-                            await respondToAccessRequest(req._id, "reject");
-                            alert("Request rejected!");
-                            const requests = await getIncomingAccessRequests();
-                            setIncomingRequests(requests);
-                          } catch (error) {
-                            alert("Failed: " + error.message);
-                          }
-                        }}
+                        onClick={() =>
+                          handleAccessRequestResponse(req._id, "reject")
+                        }
                         className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex-1 justify-center"
                       >
                         <X size={16} /> Reject

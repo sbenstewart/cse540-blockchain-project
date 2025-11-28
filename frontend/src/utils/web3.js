@@ -280,7 +280,7 @@ function generateMockIPFSHash(fileName) {
   const timestamp = Date.now().toString();
   const randomChars = Math.random().toString(36).substring(2, 15);
   const combined = (fileName + timestamp + randomChars).slice(0, 44);
-  return "Qm" + combined.padEnd(44, "0").substring(0, 42);
+  return combined.padEnd(44, "0").substring(0, 42);
 }
 
 /**
@@ -549,6 +549,7 @@ export async function revokeAccessFromDoctor(doctorWallet, recordIndex) {
       body: JSON.stringify({
         doctorWallet,
         recordIndex,
+        patientWallet: JSON.parse(localStorage.getItem("user")).walletAddress,
       }),
     });
 
