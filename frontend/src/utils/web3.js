@@ -228,60 +228,6 @@ export async function getAvailableAccounts() {
  * @param {File} file - File to upload
  * @returns {Promise<string>} IPFS hash
  */
-export async function uploadFileToIPFS(file) {
-  if (!file) {
-    throw new Error("No file provided");
-  }
-
-  try {
-    // Using web3.storage's free gateway (alternative to Infura)
-    const formData = new FormData();
-    formData.append("file", file);
-
-    // Try web3.storage endpoint
-    const response = await fetch("https://api.web3.storage/upload", {
-      method: "POST",
-      body: formData,
-      headers: {
-        // web3.storage allows unauthenticated uploads for demo purposes
-      },
-    });
-
-    if (!response.ok) {
-      // Fallback: Use local mock IPFS hash for demo if both gateways fail
-      console.warn(
-        "Remote IPFS gateway failed, generating demo hash for testing"
-      );
-      const mockHash = generateMockIPFSHash(file.name);
-      console.log("Using demo IPFS hash:", mockHash);
-      return mockHash;
-    }
-
-    const data = await response.json();
-    console.log("File uploaded to IPFS:", data.cid);
-    return data.cid;
-  } catch (error) {
-    console.warn(
-      "IPFS upload failed, generating demo hash for testing:",
-      error.message
-    );
-    // Fallback: Generate demo hash for demo/testing purposes
-    const mockHash = generateMockIPFSHash(file.name);
-    console.log("Using demo IPFS hash:", mockHash);
-    return mockHash;
-  }
-}
-
-/**
- * Generate a mock IPFS hash for demo/testing
- * Format: Qm followed by 44 alphanumeric characters
- */
-function generateMockIPFSHash(fileName) {
-  const timestamp = Date.now().toString();
-  const randomChars = Math.random().toString(36).substring(2, 15);
-  const combined = (fileName + timestamp + randomChars).slice(0, 44);
-  return combined.padEnd(44, "0").substring(0, 42);
-}
 
 /**
  * Save medical record metadata to backend

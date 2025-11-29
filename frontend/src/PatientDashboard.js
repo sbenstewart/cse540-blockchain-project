@@ -9,15 +9,22 @@ import {
   X,
 } from "lucide-react";
 import {
-  uploadFileToIPFS,
   saveMedicalRecordMetadata,
   fetchMedicalRecords,
   grantAccessToDoctor,
   revokeAccessFromDoctor,
   getIncomingAccessRequests,
-  respondToAccessRequest,
 } from "./utils/web3";
 
+// import multer from "multer";
+import { create } from "ipfs-http-client";
+// const upload = multer();
+
+const ipfs = create({
+  host: "localhost",
+  port: 5001,
+  protocol: "http",
+});
 // All blockchain interactions are left as TODOs for your friend.
 // Right now these functions just log to the console.
 
@@ -74,6 +81,18 @@ export default function PatientDashboard({ onLogout }) {
   }, []);
 
   // ---------- Placeholder functions for blockchain integration ----------
+  // async function uploadFileToIPFS(file) {
+  //   try {
+  //     const data = await file.arrayBuffer();
+  //     const result = await ipfs.add(data);
+
+  //     // Return CID (hash)
+  //     return result.cid.toString();
+  //   } catch (err) {
+  //     console.error("IPFS upload error:", err);
+  //     throw new Error("Failed to upload file to IPFS");
+  //   }
+  // }
 
   const uploadToIPFSAndSave = async () => {
     if (!file) {
@@ -85,8 +104,23 @@ export default function PatientDashboard({ onLogout }) {
       alert("Uploading file to IPFS... Please wait.");
 
       // Upload file to IPFS
-      const ipfsHash = await uploadFileToIPFS(file);
-      console.log("File uploaded to IPFS with hash:", ipfsHash);
+      // Build form data for backend
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // 1) Upload file to backend, which uploads to IPFS
+      const res = await fetch("http://localhost:5000/api/ipfs-upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "IPFS upload failed");
+      }
+
+      const { cid } = await res.json();
+      const ipfsHash = cid;
 
       // Save metadata to backend
       await saveMedicalRecordMetadata(

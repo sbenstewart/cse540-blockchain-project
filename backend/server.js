@@ -7,6 +7,11 @@ import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
+import multer from "multer";
+import { create } from "ipfs-http-client";
+import ipfsUploadRouter from "./ipfsUploadRoute.js";
+
+const upload = multer();
 
 dotenv.config();
 
@@ -15,6 +20,14 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+app.use("/api", ipfsUploadRouter);
+
+const ipfs = create({
+  host: "localhost",
+  port: 5001,
+  protocol: "http",
+});
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this";
 const MONGODB_URI =
