@@ -531,13 +531,15 @@ app.get("/api/medical-records/:ipfsHash", verifyToken, async (req, res) => {
     }
 
     // Check if user has access (owner or in sharedWith list)
-    if (
-      record.userId !== req.userId &&
-      !record.sharedWith.includes(req.userId)
-    ) {
+    const hasAccess =
+      record.userId === req.userId ||
+      record.sharedWith.some(
+        (entry) => entry.doctorId === req.userId.toString()
+      );
+
+    if (!hasAccess) {
       return res.status(403).json({ error: "Access denied" });
     }
-
     res.json(record);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -859,14 +861,21 @@ app.post("/api/revoke-access", verifyToken, async (req, res) => {
     );
 
     await record.save();
-    // const accessRequest = await AccessRequest.findById(req.params.requestId);
-    // if (!accessRequest) {
-    //   return res.status(404).json({ error: "Request not found" });
-    // }
 
-    // accessRequest.status = "revoked";
-    // accessRequest.respondedAt = new Date();
-    // await accessRequest.save();
+    //updating the status to revoked
+    await AccessRequest.updateMany(
+      {
+        recordId: record._id,
+        doctorWallet: doctorWallet,
+        status: "approved",
+      },
+      {
+        $set: {
+          status: "revoked",
+          respondedAt: new Date(),
+        },
+      }
+    );
 
     console.log(
       `Access revoked: doctor ${doctorWallet} from patient record ${recordIndex}`

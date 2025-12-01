@@ -362,9 +362,13 @@ export default function PatientDashboard({ onLogout }) {
                               <button
                                 onClick={async () => {
                                   try {
-                                    await revokeAccessFromDoctor(
+                                    const result = await revokeAccessFromDoctor(
                                       doctor.doctorWallet,
                                       r.recordIndex
+                                    );
+                                    alert(
+                                      result?.message ||
+                                        "Access revoked successfully"
                                     );
                                     await fetchMyRecords();
                                   } catch (error) {
