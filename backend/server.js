@@ -859,14 +859,20 @@ app.post("/api/revoke-access", verifyToken, async (req, res) => {
     );
 
     await record.save();
-    // const accessRequest = await AccessRequest.findById(req.params.requestId);
-    // if (!accessRequest) {
-    //   return res.status(404).json({ error: "Request not found" });
-    // }
-
-    // accessRequest.status = "revoked";
-    // accessRequest.respondedAt = new Date();
-    // await accessRequest.save();
+    // status is updated to revoke
+    await AccessRequest.updateMany(
+      {
+        recordId: record._id,
+        doctorWallet: doctorWallet,
+        status: "approved",
+      },
+      {
+        $set: {
+          status: "revoked",
+          respondedAt: new Date(),
+        },
+      }
+    );
 
     console.log(
       `Access revoked: doctor ${doctorWallet} from patient record ${recordIndex}`
