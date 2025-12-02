@@ -37,13 +37,14 @@ This decentralized application (dApp) revolutionizes medical record management b
 **In Progress:**
 - IPFS integration for actual file uploads
 - React-based frontend interface
+- Backend middleware for IPFS uploads
 
 ## Table of Contents
 
 - [Project Description](#project-description)
 - [Current Implementation Status](#current-implementation-status)
 - [Prerequisites](#prerequisites)
-- [Deployment Guide](#deployment-guide)
+- [Full Setup Guide](#full-setup-guide)
 - [Using the Application](#using-the-application)
 - [Smart Contract Documentation](#smart-contract-documentation)
 - [Troubleshooting](#troubleshooting)
@@ -81,9 +82,15 @@ npm --version
 truffle version
 ```
 
-## Deployment Guide
+## Full Setup Guide
 
-### Step 1: Start Ganache
+This guide is split into two parts:
+1.  **Blockchain Setup:** Compiling and deploying the smart contract to a local Ganache blockchain.
+2.  **Application Setup:** Installing dependencies and running the backend and frontend servers.
+
+### Part 1: Blockchain Setup
+
+#### Step 1: Start Ganache
 
 1. Open the Ganache desktop application
 2. Click **"Quickstart Ethereum"** to create a new workspace
@@ -92,10 +99,10 @@ truffle version
 
 ![Ganache Blockchain](documentation/screenshots/ganache%20blockchain.png)
 
-### Step 2: Compile Smart Contracts
+#### Step 2: Compile Smart Contracts
 
 ```bash
-# Compile the Solidity contracts
+# From the project root directory
 truffle compile
 ```
 
@@ -111,7 +118,7 @@ Compiling your contracts...
    - solc: 0.8.19
 ```
 
-### Step 3: Deploy to Local Blockchain
+#### Step 3: Deploy to Local Blockchain
 
 ```bash
 # Deploy contracts to Ganache
@@ -153,7 +160,7 @@ Summary
 
 ![Truffle Migrate](documentation/screenshots/truffle%20migrate.png)
 
-### Step 4: Configure MetaMask
+#### Step 4: Configure MetaMask
 
 1. **Add Ganache Network to MetaMask:**
    - Open MetaMask extension in your browser
@@ -167,6 +174,46 @@ Summary
      Currency Symbol: ETH
      ```
    - Click **"Save"**
+
+#### Step 5: Set Up the Backend
+
+The backend is an Express.js server that handles file uploads to IPFS.
+
+1.  **Navigate to the backend directory:**
+    ```bash
+    cd backend
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+
+3.  **Start the backend server:**
+    ```bash
+    npm start
+    ```
+    The server will start on port 5000.
+
+#### Step 6: Set Up the Frontend
+
+The frontend is a React application.
+
+1.  **Open a new terminal** and navigate to the frontend directory:
+    ```bash
+    cd frontend
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+
+3.  **Start the frontend development server:**
+    ```bash
+    npm start
+    ```
+    The application will open automatically in your browser at `http://localhost:3000`.
 
 **Your dApp is now deployed and ready to use!**
 
@@ -571,6 +618,8 @@ Please ensure your code:
 
 ```
 cse540-blockchain-project/
+├── backend/                      # Express.js server for IPFS uploads
+├── frontend/                     # React frontend application
 ├── contracts/
 │   └── MedicalRecordsContract.sol  # Core smart contract
 ├── migrations/
