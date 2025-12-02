@@ -32,7 +32,7 @@ export default function AccountAssignment() {
       setError(
         `Failed to load accounts: ${
           err.message || "Unknown error"
-        }. Make sure backend is running on localhost:5000.`
+        }. Make sure backend is running on localhost:5050.`
       );
     } finally {
       setLoading(false);

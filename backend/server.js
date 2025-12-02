@@ -966,7 +966,7 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "Backend server is running" });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
 });

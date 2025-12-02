@@ -43,7 +43,7 @@ export default function DoctorDashboard({ onLogout }) {
     }
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/access-request", {
+      const response = await fetch("http://localhost:5050/api/access-request", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -75,7 +75,7 @@ export default function DoctorDashboard({ onLogout }) {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/approved-access?patientWallet=${patientAddress}`,
+        `http://localhost:5050/api/approved-access?patientWallet=${patientAddress}`,
         {
           method: "GET",
           headers: {
@@ -195,7 +195,7 @@ export default function DoctorDashboard({ onLogout }) {
                 onClick={requestAccess}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm"
               >
-                Request Access (placeholder)
+                Request Access
               </button>
             </div>
           )}
@@ -273,7 +273,7 @@ export default function DoctorDashboard({ onLogout }) {
                       <p className="text-sm break-all">
                         <strong>IPFS:</strong>{" "}
                         <a
-                          href={`https://ipfs.io/ipfs/${r.ipfsHash}`}
+                          href={`http://localhost:8080/ipfs/${r.ipfsHash}`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-indigo-600 hover:underline"

@@ -109,7 +109,7 @@ export default function PatientDashboard({ onLogout }) {
       formData.append("file", file);
 
       // 1) Upload file to backend, which uploads to IPFS
-      const res = await fetch("http://localhost:5000/api/ipfs-upload", {
+      const res = await fetch("http://localhost:5050/api/ipfs-upload", {
         method: "POST",
         body: formData,
       });
@@ -164,7 +164,7 @@ export default function PatientDashboard({ onLogout }) {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/access-requests/${requestId}/respond`,
+        `http://localhost:5050/api/access-requests/${requestId}/respond`,
         {
           method: "PUT",
           headers: {
@@ -262,7 +262,7 @@ export default function PatientDashboard({ onLogout }) {
                   onClick={uploadToIPFSAndSave}
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition"
                 >
-                  Upload & Save (placeholder)
+                  Upload & Save
                 </button>
               </div>
 

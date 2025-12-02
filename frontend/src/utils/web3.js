@@ -22,7 +22,7 @@ async function handleApiResponse(response, operationName = "API request") {
       const responseText = await response.text();
       if (responseText.includes("<!DOCTYPE")) {
         throw new Error(
-          "Backend server is not running. Make sure npm start is running in the backend folder on port 5000."
+          "Backend server is not running. Make sure npm start is running in the backend folder on port 5050."
         );
       }
       throw new Error(`${operationName} failed: ${response.statusText}`);
@@ -81,7 +81,7 @@ export async function connectMetaMask() {
 export async function autoAssignWalletToUser(email, role, token) {
   try {
     const response = await fetch(
-      "http://localhost:5000/api/auto-assign-wallet",
+      "http://localhost:5050/api/auto-assign-wallet",
       {
         method: "POST",
         headers: {
@@ -114,7 +114,7 @@ export async function autoAssignWalletToUser(email, role, token) {
  */
 export async function assignWalletToUser(email, walletAddress, role, token) {
   try {
-    const response = await fetch("http://localhost:5000/api/assign-wallet", {
+    const response = await fetch("http://localhost:5050/api/assign-wallet", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -146,7 +146,7 @@ export async function assignWalletToUser(email, walletAddress, role, token) {
  */
 export async function getAllUsers(token) {
   try {
-    const response = await fetch("http://localhost:5000/api/users", {
+    const response = await fetch("http://localhost:5050/api/users", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -170,7 +170,7 @@ export async function getAvailableAccounts() {
   try {
     // Try to fetch from Ganache
     const allAccounts = await getGanacheAccounts();
-    const response = await fetch("http://localhost:5000/api/accounts");
+    const response = await fetch("http://localhost:5050/api/accounts");
     const data = await response.json();
     const assignedAccounts = data.assignedAccounts || {};
 
@@ -190,7 +190,7 @@ export async function getAvailableAccounts() {
 
     // Fallback: use hardcoded accounts from backend
     try {
-      const response = await fetch("http://localhost:5000/api/accounts");
+      const response = await fetch("http://localhost:5050/api/accounts");
       const data = await response.json();
       const assignedAccounts = data.assignedAccounts || {};
 
@@ -253,7 +253,7 @@ export async function saveMedicalRecordMetadata(
       throw new Error("No wallet address found. Please login first.");
     }
 
-    const response = await fetch("http://localhost:5000/api/medical-records", {
+    const response = await fetch("http://localhost:5050/api/medical-records", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -296,7 +296,7 @@ export async function fetchMedicalRecords() {
       throw new Error("No authentication token found. Please login first.");
     }
 
-    const response = await fetch("http://localhost:5000/api/medical-records", {
+    const response = await fetch("http://localhost:5050/api/medical-records", {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -334,7 +334,7 @@ export async function requestAccessToRecord(patientWallet, recordIndex) {
       throw new Error("No authentication token found. Please login first.");
     }
 
-    const response = await fetch("http://localhost:5000/api/access-request", {
+    const response = await fetch("http://localhost:5050/api/access-request", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -373,7 +373,7 @@ export async function getIncomingAccessRequests() {
     }
 
     const response = await fetch(
-      "http://localhost:5000/api/access-requests/incoming",
+      "http://localhost:5050/api/access-requests/incoming",
       {
         method: "GET",
         headers: {
@@ -407,7 +407,7 @@ export async function respondToAccessRequest(requestId, action) {
     }
 
     const response = await fetch(
-      `http://localhost:5000/api/access-requests/${requestId}/respond`,
+      `http://localhost:5050/api/access-requests/${requestId}/respond`,
       {
         method: "PUT",
         headers: {
@@ -446,7 +446,7 @@ export async function grantAccessToDoctor(doctorWallet, recordIndex) {
       throw new Error("No authentication token found. Please login first.");
     }
 
-    const response = await fetch("http://localhost:5000/api/grant-access", {
+    const response = await fetch("http://localhost:5050/api/grant-access", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -486,7 +486,7 @@ export async function revokeAccessFromDoctor(doctorWallet, recordIndex) {
       throw new Error("No authentication token found. Please login first.");
     }
 
-    const response = await fetch("http://localhost:5000/api/revoke-access", {
+    const response = await fetch("http://localhost:5050/api/revoke-access", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
