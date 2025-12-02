@@ -195,7 +195,7 @@ export default function DoctorDashboard({ onLogout }) {
                 onClick={requestAccess}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm"
               >
-                Request Access (placeholder)
+                Request Access
               </button>
             </div>
           )}
@@ -230,7 +230,7 @@ export default function DoctorDashboard({ onLogout }) {
                   onClick={fetchAccessibleRecords}
                   className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm"
                 >
-                  Fetch Accessible Records (placeholder)
+                  Fetch Accessible Records
                 </button>
               </div>
 
@@ -273,7 +273,7 @@ export default function DoctorDashboard({ onLogout }) {
                       <p className="text-sm break-all">
                         <strong>IPFS:</strong>{" "}
                         <a
-                          href={`https://ipfs.io/ipfs/${r.ipfsHash}`}
+                          href={`http://localhost:8080/ipfs/${r.ipfsHash}`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-indigo-600 hover:underline"

@@ -262,7 +262,7 @@ export default function PatientDashboard({ onLogout }) {
                   onClick={uploadToIPFSAndSave}
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition"
                 >
-                  Upload & Save (placeholder)
+                  Upload & Save
                 </button>
               </div>
 
